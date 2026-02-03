@@ -152,18 +152,35 @@ class PufferPanelClient:
                     if retry_resp.status >= 400:
                         text = await retry_resp.text()
                         raise APIError(f"API request failed: {text}", retry_resp.status)
-                    if retry_resp.status == 204:
-                        return None
-                    return await retry_resp.json()
+                    return await self._parse_response(retry_resp)
             
             if resp.status >= 400:
                 text = await resp.text()
                 raise APIError(f"API request failed: {text}", resp.status)
             
-            if resp.status == 204:
-                return None
-            
+            return await self._parse_response(resp)
+    
+    async def _parse_response(self, resp: aiohttp.ClientResponse) -> Optional[dict]:
+        """Parse response, handling empty bodies."""
+        # 202 Accepted, 204 No Content - no body expected
+        if resp.status in (202, 204):
+            return None
+        
+        # Check if there's content
+        content_length = resp.headers.get("Content-Length", "0")
+        if content_length == "0":
+            return None
+        
+        # Check content type
+        content_type = resp.headers.get("Content-Type", "")
+        if "application/json" not in content_type:
+            # Not JSON, return None
+            return None
+        
+        try:
             return await resp.json()
+        except Exception:
+            return None
     
     async def get_server_status(self) -> ServerStatus:
         """Get current server status."""

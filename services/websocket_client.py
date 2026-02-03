@@ -44,8 +44,8 @@ class WebSocketLogClient:
         """Check if WebSocket is connected."""
         return self._connected
     
-    def _get_websocket_url(self) -> str:
-        """Build WebSocket URL from PufferPanel config."""
+    def _get_websocket_url(self, token: str) -> str:
+        """Build WebSocket URL from PufferPanel config with token."""
         base = self._config.base_url
         parsed = urlparse(base)
         
@@ -55,7 +55,8 @@ class WebSocketLogClient:
         else:
             ws_scheme = "ws"
         
-        return f"{ws_scheme}://{parsed.netloc}/proxy/daemon/socket/{self._config.server_id}"
+        # PufferPanel 2.x expects token as query parameter
+        return f"{ws_scheme}://{parsed.netloc}/proxy/daemon/socket/{self._config.server_id}?token={token}"
     
     async def connect(self) -> bool:
         """
@@ -74,7 +75,7 @@ class WebSocketLogClient:
             print("WebSocket: No valid token available")
             return False
         
-        url = self._get_websocket_url()
+        url = self._get_websocket_url(token)
         
         try:
             # Create SSL context for wss connections
@@ -82,38 +83,48 @@ class WebSocketLogClient:
             if url.startswith("wss"):
                 ssl_context = ssl.create_default_context()
             
+            # Add Authorization header as backup
+            extra_headers = {
+                "Authorization": f"Bearer {token}",
+            }
+            
             self._websocket = await websockets.connect(
                 url,
                 ssl=ssl_context,
                 ping_interval=30,
                 ping_timeout=10,
+                additional_headers=extra_headers,
             )
             
-            # Send authentication message
-            auth_message = {
-                "type": "auth",
-                "token": token,
-            }
-            await self._websocket.send(json.dumps(auth_message))
-            
-            # Wait for auth response
-            response_raw = await asyncio.wait_for(
-                self._websocket.recv(),
-                timeout=10.0,
-            )
-            response = json.loads(response_raw)
-            
-            if response.get("type") == "error":
-                print(f"WebSocket auth failed: {response.get('message', 'Unknown error')}")
-                await self._websocket.close()
-                return False
+            # PufferPanel 2.x authenticates via URL token, wait for ready message
+            try:
+                response_raw = await asyncio.wait_for(
+                    self._websocket.recv(),
+                    timeout=10.0,
+                )
+                response = json.loads(response_raw)
+                
+                if response.get("type") == "error":
+                    print(f"WebSocket auth failed: {response.get('message', 'Unknown error')}")
+                    await self._websocket.close()
+                    return False
+                
+                # Log initial message type for debugging
+                print(f"WebSocket: Initial message type: {response.get('type', 'unknown')}")
+                
+            except asyncio.TimeoutError:
+                # No initial message might be okay - connection established
+                print("WebSocket: No initial message (may be normal)")
+            except json.JSONDecodeError:
+                # Non-JSON response might be a log line
+                print("WebSocket: Received non-JSON initial message")
             
             self._connected = True
-            print(f"WebSocket: Connected to {url}")
+            print(f"WebSocket: Connected to server {self._config.server_id}")
             return True
             
         except asyncio.TimeoutError:
-            print("WebSocket: Authentication timeout")
+            print("WebSocket: Connection timeout")
             return False
         except WebSocketException as e:
             print(f"WebSocket: Connection failed: {e}")
@@ -194,8 +205,18 @@ class WebSocketLogClient:
             if msg_type == "console":
                 # Log message from console
                 data = message.get("data", "")
-                if data and self._log_callback:
-                    self._log_callback(data)
+                log_line = self._extract_log_line(data)
+                if log_line and self._log_callback:
+                    self._log_callback(log_line)
+            
+            elif msg_type == "logs":
+                # Batch of log messages (alternative format)
+                logs = message.get("logs", message.get("data", []))
+                if isinstance(logs, list):
+                    for entry in logs:
+                        log_line = self._extract_log_line(entry)
+                        if log_line and self._log_callback:
+                            self._log_callback(log_line)
                     
             elif msg_type == "status":
                 # Server status update
@@ -208,6 +229,22 @@ class WebSocketLogClient:
             # Non-JSON message (might be raw log)
             if self._log_callback:
                 self._log_callback(message_raw)
+    
+    def _extract_log_line(self, data) -> str:
+        """Extract log line from various data formats."""
+        if isinstance(data, str):
+            return data
+        elif isinstance(data, dict):
+            # Try common field names for log content
+            for key in ("message", "msg", "log", "line", "text", "data"):
+                if key in data and isinstance(data[key], str):
+                    return data[key]
+            # Fallback: convert dict to string
+            return json.dumps(data)
+        elif data is None:
+            return ""
+        else:
+            return str(data)
     
     async def _reconnect_loop(self) -> None:
         """Attempt to reconnect with exponential backoff."""
