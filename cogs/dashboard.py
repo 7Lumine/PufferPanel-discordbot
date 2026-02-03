@@ -366,8 +366,7 @@ class Dashboard(commands.Cog):
         name="setup",
         description="ダッシュボードメッセージを作成します",
     )
-    @commands.has_role  # Will be checked manually
-    async def setup(self, ctx: discord.ApplicationContext):
+    async def setup_dashboard(self, ctx: discord.ApplicationContext):
         """Create the dashboard message."""
         # Check permission
         allowed_role_id = self._config.discord.allowed_role_id

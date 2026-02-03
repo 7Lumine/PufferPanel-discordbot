@@ -1,5 +1,5 @@
-# Discord Bot
-discord.py>=2.3.0
+# Discord Bot (py-cord)
+py-cord>=2.4.0
 
 # HTTP/WebSocket
 aiohttp>=3.9.0

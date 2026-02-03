@@ -29,13 +29,13 @@ class PufferPanelBot(discord.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._config = None
-        self._ready = False
+        self._bot_initialized = False
     
     async def on_ready(self):
         """Called when the bot is ready."""
-        if self._ready:
+        if self._bot_initialized:
             return
-        self._ready = True
+        self._bot_initialized = True
         
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         print("------")
