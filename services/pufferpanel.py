@@ -239,6 +239,22 @@ class PufferPanelClient:
         except APIError:
             return None
     
+    async def send_command(self, command: str) -> bool:
+        """
+        Send a console command to the server.
+        Returns True if successful.
+        """
+        try:
+            await self._request(
+                "POST",
+                f"/proxy/daemon/server/{self._config.server_id}/console",
+                data=command,  # PufferPanel expects raw command string
+            )
+            return True
+        except APIError as e:
+            print(f"Failed to send command: {e}")
+            return False
+    
     @property
     def base_url(self) -> str:
         """Get base URL for WebSocket connection."""

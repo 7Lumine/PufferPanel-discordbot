@@ -424,6 +424,57 @@ class Dashboard(commands.Cog):
             f"✅ ダッシュボードを作成しました (Message ID: {message.id})",
             ephemeral=True,
         )
+    
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Listen for messages in log thread to execute as server commands."""
+        # Ignore bot messages
+        if message.author.bot:
+            return
+        
+        # Check if message is in a thread
+        if not isinstance(message.channel, discord.Thread):
+            return
+        
+        # Check if this is the current log thread
+        state = get_state_manager()
+        if not state.state.current_thread_id:
+            return
+        
+        if message.channel.id != state.state.current_thread_id:
+            return
+        
+        # Check if log sync is enabled
+        if not state.state.logs_enabled:
+            return
+        
+        # Check if user has allowed role
+        allowed_role_id = self._config.discord.allowed_role_id
+        if not hasattr(message.author, "roles"):
+            return
+        
+        if not any(role.id == allowed_role_id for role in message.author.roles):
+            return
+        
+        # Get command from message content
+        command = message.content.strip()
+        if not command:
+            return
+        
+        # Send command to server
+        try:
+            client = get_pufferpanel_client()
+            success = await client.send_command(command)
+            
+            if success:
+                # React with checkmark to indicate command was sent
+                await message.add_reaction("✅")
+            else:
+                await message.add_reaction("❌")
+                
+        except Exception as e:
+            print(f"Command execution failed: {e}")
+            await message.add_reaction("⚠️")
 
 
 def setup(bot: discord.Bot):
