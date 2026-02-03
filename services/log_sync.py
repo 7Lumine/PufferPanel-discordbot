@@ -221,11 +221,16 @@ class LogSyncService:
     
     def _on_log_received(self, log_line: str) -> None:
         """Callback when log line is received from WebSocket."""
+        # Skip empty lines
+        if not log_line or not log_line.strip():
+            return
         # Add to buffer (synchronously called from WebSocket handler)
         asyncio.create_task(self._add_to_buffer(log_line))
     
     async def _add_to_buffer(self, log_line: str) -> None:
         """Add log line to buffer."""
+        # Debug: print first 100 chars of what we're buffering
+        # print(f"LogSync: Buffering: {log_line[:100]}...")
         async with self._buffer_lock:
             self._log_buffer.append(log_line)
     

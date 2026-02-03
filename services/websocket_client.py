@@ -5,6 +5,7 @@ Receives real-time server logs via WebSocket connection.
 
 import asyncio
 import json
+import re
 import ssl
 from typing import Callable, Optional
 from urllib.parse import urlparse
@@ -201,24 +202,33 @@ class WebSocketLogClient:
         try:
             message = json.loads(message_raw)
             msg_type = message.get("type", "")
+            data = message.get("data", {})
             
+            # Handle console type with nested logs: {"type": "console", "data": {"logs": [...]}}
             if msg_type == "console":
-                # Log message from console
-                data = message.get("data", "")
-                log_line = self._extract_log_line(data)
-                if log_line and self._log_callback:
-                    self._log_callback(log_line)
+                # data can be a dict with "logs" key or a direct value
+                if isinstance(data, dict) and "logs" in data:
+                    logs = data["logs"]
+                    if isinstance(logs, list):
+                        for entry in logs:
+                            log_line = self._extract_log_line(entry)
+                            if log_line and self._log_callback:
+                                self._log_callback(log_line)
+                elif isinstance(data, str):
+                    log_line = self._extract_log_line(data)
+                    if log_line and self._log_callback:
+                        self._log_callback(log_line)
+                return
             
-            elif msg_type == "logs":
-                # Batch of log messages (alternative format)
-                logs = message.get("logs", message.get("data", []))
-                if isinstance(logs, list):
-                    for entry in logs:
-                        log_line = self._extract_log_line(entry)
-                        if log_line and self._log_callback:
-                            self._log_callback(log_line)
+            # Handle direct logs array format: {"logs": [...]} (fallback)
+            if "logs" in message and isinstance(message["logs"], list):
+                for entry in message["logs"]:
+                    log_line = self._extract_log_line(entry)
+                    if log_line and self._log_callback:
+                        self._log_callback(log_line)
+                return
                     
-            elif msg_type == "status":
+            if msg_type == "status":
                 # Server status update
                 pass  # Could add status callback if needed
                 
@@ -228,23 +238,55 @@ class WebSocketLogClient:
         except json.JSONDecodeError:
             # Non-JSON message (might be raw log)
             if self._log_callback:
-                self._log_callback(message_raw)
+                clean_line = self._clean_log_line(message_raw)
+                if clean_line:
+                    self._log_callback(clean_line)
     
     def _extract_log_line(self, data) -> str:
         """Extract log line from various data formats."""
+        raw = ""
         if isinstance(data, str):
-            return data
+            raw = data
         elif isinstance(data, dict):
             # Try common field names for log content
             for key in ("message", "msg", "log", "line", "text", "data"):
                 if key in data and isinstance(data[key], str):
-                    return data[key]
-            # Fallback: convert dict to string
-            return json.dumps(data)
+                    raw = data[key]
+                    break
+            else:
+                # Fallback: convert dict to string
+                raw = json.dumps(data)
         elif data is None:
             return ""
         else:
-            return str(data)
+            raw = str(data)
+        
+        return self._clean_log_line(raw)
+    
+    # ANSI escape code pattern - matches all CSI sequences
+    # \x1b (ESC) followed by [ and any parameters ending with a letter
+    _ANSI_PATTERN = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\x1b[()][AB012]')
+    
+    def _clean_log_line(self, line: str) -> str:
+        """Clean up a log line for Discord display."""
+        # Remove ANSI color/style codes
+        line = self._ANSI_PATTERN.sub('', line)
+        
+        # Also remove any remaining escape sequences that might be encoded differently
+        # Handle \u001b which is the same as \x1b
+        line = re.sub(r'[\x00-\x1f\x7f]', '', line)  # Remove all control characters except newline
+        line = line.replace('\n', ' ')  # Keep content on single line per entry
+        
+        # Remove carriage returns
+        line = line.replace('\r', '')
+        
+        # Clean up multiple spaces
+        line = re.sub(r' {2,}', ' ', line)
+        
+        # Strip leading/trailing whitespace
+        line = line.strip()
+        
+        return line
     
     async def _reconnect_loop(self) -> None:
         """Attempt to reconnect with exponential backoff."""
