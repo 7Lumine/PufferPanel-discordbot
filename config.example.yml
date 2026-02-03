@@ -1,0 +1,63 @@
+# PufferPanel Discord Bot Configuration
+# Copy this file to config.yml and fill in your values
+
+pufferpanel:
+  # PufferPanel base URL (no trailing slash)
+  base_url: "https://panel.example.com"
+  
+  # Server ID (UUID recommended - check Network tab in browser for actual ID)
+  server_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  
+  # OAuth2 credentials (create in PufferPanel settings)
+  oauth2:
+    client_id: "your_client_id"
+    client_secret: "your_client_secret"
+    token_endpoint: "/oauth2/token"
+
+discord:
+  # Bot token from Discord Developer Portal
+  token: "your_bot_token"
+  
+  # Guild (server) ID where the bot operates
+  guild_id: 123456789012345678
+  
+  # Channel ID for the dashboard message
+  dashboard_channel_id: 123456789012345678
+  
+  # Channel ID where log threads will be created (can be different from dashboard)
+  log_parent_channel_id: 123456789012345678
+  
+  # Role ID that is allowed to use the bot
+  allowed_role_id: 123456789012345678
+
+logs:
+  # Automatically resume log sync when bot restarts
+  auto_resume: false
+  
+  # Timezone for log thread names
+  timezone: "Asia/Tokyo"
+  
+  thread:
+    # Auto-archive duration in minutes (1440 = 1 day)
+    auto_archive_minutes: 1440
+    # Thread name format ({date} will be replaced with YYYY-MM-DD)
+    name_format: "mc-log-{date}"
+  
+  # Seconds to batch logs before sending
+  batch_seconds: 5
+  
+  # Maximum characters per Discord message (Discord limit is 2000)
+  max_chars_per_post: 1900
+
+actions:
+  # Cooldown between Start/Stop/Restart actions (seconds)
+  cooldown_sec: 10
+  
+  restart:
+    # Timeout waiting for server to stop (seconds)
+    stop_timeout_sec: 30
+    # Timeout waiting for server to start (seconds)
+    start_timeout_sec: 30
+
+# Path to state file (relative to bot.py or absolute)
+state_file: "./data/state.json"
