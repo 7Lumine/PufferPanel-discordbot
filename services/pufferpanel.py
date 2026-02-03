@@ -166,17 +166,7 @@ class PufferPanelClient:
         if resp.status in (202, 204):
             return None
         
-        # Check if there's content
-        content_length = resp.headers.get("Content-Length", "0")
-        if content_length == "0":
-            return None
-        
-        # Check content type
-        content_type = resp.headers.get("Content-Type", "")
-        if "application/json" not in content_type:
-            # Not JSON, return None
-            return None
-        
+        # Try to parse JSON regardless of Content-Length (chunked encoding may not set it)
         try:
             return await resp.json()
         except Exception:
