@@ -277,7 +277,7 @@ class LogSyncService:
         
         for chunk in chunks:
             try:
-                await self._current_thread.send(f"```\n{chunk}\n```")
+                await self._current_thread.send(f"```ansi\n{chunk}\n```")
             except discord.Forbidden:
                 print("LogSync: Cannot send to thread - missing permissions")
                 break
@@ -287,7 +287,7 @@ class LogSyncService:
                     print(f"LogSync: Rate limited, waiting {retry_after}s")
                     await asyncio.sleep(retry_after)
                     try:
-                        await self._current_thread.send(f"```\n{chunk}\n```")
+                        await self._current_thread.send(f"```ansi\n{chunk}\n```")
                     except Exception:
                         pass
                 else:

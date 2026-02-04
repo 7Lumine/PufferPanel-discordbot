@@ -267,25 +267,56 @@ class WebSocketLogClient:
     # \x1b (ESC) followed by [ and any parameters ending with a letter
     _ANSI_PATTERN = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\x1b[()][AB012]')
     
+    # Discord ANSI color codes
+    ANSI_RESET = "\u001b[0m"
+    ANSI_GRAY = "\u001b[30m"
+    ANSI_RED = "\u001b[31m"
+    ANSI_GREEN = "\u001b[32m"
+    ANSI_YELLOW = "\u001b[33m"
+    ANSI_BLUE = "\u001b[34m"
+    ANSI_CYAN = "\u001b[36m"
+    ANSI_WHITE = "\u001b[37m"
+    
+    # Log level pattern for Minecraft logs
+    _LOG_LEVEL_PATTERN = re.compile(r'\[[\d:]+\s+(INFO|WARN|ERROR|DEBUG|FATAL)\]')
+    
     def _clean_log_line(self, line: str) -> str:
-        """Clean up a log line for Discord display."""
-        # Remove ANSI color/style codes
+        """Clean up a log line for Discord display with ANSI colors."""
+        # Remove original ANSI color/style codes
         line = self._ANSI_PATTERN.sub('', line)
         
-        # Also remove any remaining escape sequences that might be encoded differently
-        # Handle \u001b which is the same as \x1b
-        line = re.sub(r'[\x00-\x1f\x7f]', '', line)  # Remove all control characters except newline
-        line = line.replace('\n', ' ')  # Keep content on single line per entry
-        
-        # Remove carriage returns
+        # Also remove any remaining escape sequences
+        line = re.sub(r'[\x00-\x1f\x7f]', '', line)
+        line = line.replace('\n', ' ')
         line = line.replace('\r', '')
         
         # Clean up multiple spaces
         line = re.sub(r' {2,}', ' ', line)
-        
-        # Strip leading/trailing whitespace
         line = line.strip()
         
+        if not line:
+            return ""
+        
+        # Add Discord ANSI colors based on log level
+        line = self._colorize_log_line(line)
+        
+        return line
+    
+    def _colorize_log_line(self, line: str) -> str:
+        """Add Discord ANSI colors based on log level."""
+        match = self._LOG_LEVEL_PATTERN.search(line)
+        if match:
+            level = match.group(1)
+            if level == "ERROR" or level == "FATAL":
+                return f"{self.ANSI_RED}{line}{self.ANSI_RESET}"
+            elif level == "WARN":
+                return f"{self.ANSI_YELLOW}{line}{self.ANSI_RESET}"
+            elif level == "INFO":
+                return f"{self.ANSI_GREEN}{line}{self.ANSI_RESET}"
+            elif level == "DEBUG":
+                return f"{self.ANSI_CYAN}{line}{self.ANSI_RESET}"
+        
+        # Default: no color
         return line
     
     async def _reconnect_loop(self) -> None:
