@@ -169,17 +169,16 @@ class LogSyncService:
             
             thread_name = self._get_thread_name(self._current_date)
             
-            # Create private thread
+            # Create public thread (channel permissions control access)
             thread = await channel.create_thread(
                 name=thread_name,
-                type=discord.ChannelType.private_thread,
+                type=discord.ChannelType.public_thread,
                 auto_archive_duration=self._config.logs.thread.auto_archive_minutes,
             )
             
             print(f"LogSync: Created thread: {thread_name}")
             
-            # Invite allowed role members
-            await self._invite_members(thread)
+            # No need to invite members - public thread inherits channel permissions
             
             return thread
             
